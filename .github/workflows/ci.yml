@@ -1,93 +1,124 @@
-  - name: Use Node.js 18
-    uses: actions/setup-node@v4
-    with:
-      node-version: '18'
-      cache: 'npm'
-
-  - name: Install dependencies (root package.json if present)
-    if: ${{ exists('package.json') }}
-    run: npm ci
-
-  - name: Run lint / build / tests (if configured)
-    if: ${{ exists('package.json') }}
-    run: |
-      if npm run | grep -q "lint"; then npm run lint || true; fi
-      if npm run | grep -q "build"; then npm run build || true; fi
-      if npm run | grep -q "test"; then npm test || true; fi
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-
-  - name: Set up Java (some Flutter tools require it)
-    uses: actions/setup-java@v4
-    with:
-      distribution: 'temurin'
-      java-version: '11'
-
-  - name: Install Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      flutter-version: 'stable'
-
-  - name: Ensure flutter_app exists
-    run: |
-      if [ ! -f flutter_app/pubspec.yaml ]; then
-        echo "No flutter_app/pubspec.yaml found — skipping Flutter steps"
-        exit 0
-      fi
-
-  - name: Cache Flutter pub
-    if: ${{ exists('flutter_app/pubspec.yaml') }}
-    uses: actions/cache@v4
-    with:
-      path: |
-        ~/.pub-cache
-        flutter_app/.pub-cache
-      key: ${{ runner.os }}-pub-${{ hashFiles('flutter_app/pubspec.yaml') }}
-      restore-keys: |
-        ${{ runner.os }}-pub-
-
-  - name: Get Flutter dependencies
-    if: ${{ exists('flutter_app/pubspec.yaml') }}
-    working-directory: flutter_app
-    run: flutter pub get
-
-  - name: Flutter analyze
-    if: ${{ exists('flutter_app/pubspec.yaml') }}
-    working-directory: flutter_app
-    run: flutter analyze --no-fatal-infos
-
-  - name: Flutter tests (if present)
-    if: ${{ exists('flutter_app/pubspec.yaml') && (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' || matrix.os == 'windows-latest') }}
-    working-directory: flutter_app
-    run: |
-      if [ -d test ]; then
-        flutter test || true
-      else
-        echo "No Flutter tests found, skipping."
-      fi
-
-  - name: Build Flutter desktop app (attempt; non-fatal)
-    if: ${{ exists('flutter_app/pubspec.yaml') }}
-    working-directory: flutter_app
-    run: |
-      set -e
-      echo "Attempting platform build for $RUNNER_OS"
-      if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-        flutter config --enable-linux-desktop || true
-        flutter build linux --release || true
-      elif [ "${{ matrix.os }}" = "windows-latest" ]; then
-        flutter config --enable-windows-desktop || true
-        flutter build windows --release || true
-      elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-        flutter config --enable-macos-desktop || true
-        flutter build macos --release || true
-      fi
-
-  - name: Upload build artifacts (if any)
-    if: always() && ${{ exists('flutter_app/pubspec.yaml') }}
-    uses: actions/upload-artifact@v4
-    with:
-      name: flutter-build-${{ matrix.os }}
-      path: |
-        flutter_app/build/**/*
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,196 @@
++name: CI
++
++on:
++  push:
++    branches: ["**"]
++  pull_request:
++    branches: ["**"]
++
++jobs:
++  node:
++    name: Node CI (web)
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Use Node.js 18
++        uses: actions/setup-node@v4
++        with:
++          node-version: '18'
++          cache: 'npm'
++
++      - name: Install dependencies (root package.json if present)
++        if: ${{ exists('package.json') }}
++        run: npm ci
++
++      - name: Run lint / build / tests (if configured)
++        if: ${{ exists('package.json') }}
++        run: |
++          if npm run | grep -q "lint"; then npm run lint || true; fi
++          if npm run | grep -q "build"; then npm run build || true; fi
++          if npm run | grep -q "test"; then npm test || true; fi
++
++  flutter:
++    name: Flutter (analyze/test/build) matrix
++    runs-on: ${{ matrix.os }}
++    strategy:
++      fail-fast: false
++      matrix:
++        os: [ubuntu-latest, macos-latest, windows-latest]
++
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Set up Java (some Flutter tools require it)
++        uses: actions/setup-java@v4
++        with:
++          distribution: 'temurin'
++          java-version: '11'
++
++      - name: Install Flutter
++        uses: subosito/flutter-action@v2
++        with:
++          flutter-version: 'stable'
++
++      - name: Ensure flutter_app exists
++        run: |
++          if [ ! -f flutter_app/pubspec.yaml ]; then
++            echo "No flutter_app/pubspec.yaml found — skipping Flutter steps"
++            exit 0
++          fi
++
++      - name: Cache Flutter pub
++        if: ${{ exists('flutter_app/pubspec.yaml') }}
++        uses: actions/cache@v4
++        with:
++          path: |
++            ~/.pub-cache
++            flutter_app/.pub-cache
++          key: ${{ runner.os }}-pub-${{ hashFiles('flutter_app/pubspec.yaml') }}
++          restore-keys: |
++            ${{ runner.os }}-pub-
++
++      - name: Get Flutter dependencies
++        if: ${{ exists('flutter_app/pubspec.yaml') }}
++        working-directory: flutter_app
++        run: flutter pub get
++
++      - name: Flutter analyze
++        if: ${{ exists('flutter_app/pubspec.yaml') }}
++        working-directory: flutter_app
++        run: flutter analyze --no-fatal-infos
++
++      - name: Flutter tests (if present)
++        if: ${{ exists('flutter_app/pubspec.yaml') && (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' || matrix.os == 'windows-latest') }}
++        working-directory: flutter_app
++        run: |
++          if [ -d test ]; then
++            flutter test || true
++          else
++            echo "No Flutter tests found, skipping."
++          fi
++
++      - name: Build Flutter desktop app (attempt; non-fatal)
++        if: ${{ exists('flutter_app/pubspec.yaml') }}
++        working-directory: flutter_app
++        run: |
++          set -e
++          echo "Attempting platform build for $RUNNER_OS"
++          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
++            flutter config --enable-linux-desktop || true
++            flutter build linux --release || true
++          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
++            flutter config --enable-windows-desktop || true
++            flutter build windows --release || true
++          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
++            flutter config --enable-macos-desktop || true
++            flutter build macos --release || true
++          fi
++
++      - name: Upload build artifacts (if any)
++        if: always() && ${{ exists('flutter_app/pubspec.yaml') }}
++        uses: actions/upload-artifact@v4
++        with:
++          name: flutter-build-${{ matrix.os }}
++          path: |
++            flutter_app/build/**/*
