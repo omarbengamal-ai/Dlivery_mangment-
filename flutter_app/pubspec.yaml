@@ -1,0 +1,13 @@
+name: pubspec.yaml
+
+environment:
+  sdk: ">=2.18.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.0.5
+  intl: ^0.18.1
+
+flutter:
+  uses-material-design: true
